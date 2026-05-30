@@ -122,6 +122,7 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
   <div id="navbar">
     <div id="nav-logo">sk<span>ed</span></div>
     <div id="nav-right">
+    <button class="nav-btn" id="export-btn">↗ calendar</button>
     <button class="nav-btn" id="settings-btn">⚙ settings</button>
     </div>
   </div>
@@ -615,6 +616,44 @@ sleepToggle.onclick=()=>{ sleepOn=!sleepOn; updateSleepToggle(); };
 $("sleep-start").onchange=e=>{ sleepStart=+e.target.value; if(sleepOn) rebuildGrid(); };
 $("sleep-end").onchange=e=>{ sleepEnd=+e.target.value; if(sleepOn) rebuildGrid(); };
 updateSleepToggle();
+
+// ICS export
+function pad(n){ return String(n).padStart(2,'0'); }
+function toICSDate(dateObj, mins){
+  const d = new Date(dateObj);
+  d.setHours(Math.floor(mins/60), mins%60, 0, 0);
+  return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+pad(d.getHours())+pad(d.getMinutes())+'00';
+}
+function exportICS(){
+  if(!blocks.length){ alert("No blocks to export."); return; }
+  const lines = [
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Sked//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+  ];
+  blocks.forEach(b=>{
+    const date = new Date(now);
+    date.setDate(now.getDate() + b.day);
+    const dtstart = toICSDate(date, b.startMins);
+    const dtend   = toICSDate(date, b.startMins + b.duration);
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:sked-${b.id}-${dtstart}@sked`,
+      `DTSTART:${dtstart}`,
+      `DTEND:${dtend}`,
+      `SUMMARY:${b.label}`,
+      'BEGIN:VALARM','TRIGGER:-PT5M','ACTION:DISPLAY',
+      `DESCRIPTION:${b.label} starts in 5 minutes`,
+      'END:VALARM',
+      'END:VEVENT'
+    );
+  });
+  lines.push('END:VCALENDAR');
+  const blob = new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='sked.ics'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$("export-btn").onclick=exportICS;
 
 updateThumb();
 </script>
