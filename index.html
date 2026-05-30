@@ -276,7 +276,14 @@ const DEFAULT_BLOCKS=[
 let blocks=JSON.parse(localStorage.getItem('sked-blocks')||'null')||DEFAULT_BLOCKS;
 function persistBlocks(){ localStorage.setItem('sked-blocks',JSON.stringify(blocks)); }
 let nextId=200,pendingMins=480,pendingDay=0,activeCat="Exercise",editId=null;
-let sleepOn=false, sleepStart=23*60, sleepEnd=7*60; // 11pm-7am default
+let sleepOn=JSON.parse(localStorage.getItem('sked-sleep-on')||'false');
+let sleepStart=JSON.parse(localStorage.getItem('sked-sleep-start')||(23*60).toString());
+let sleepEnd=JSON.parse(localStorage.getItem('sked-sleep-end')||(7*60).toString());
+function persistSleep(){
+  localStorage.setItem('sked-sleep-on',JSON.stringify(sleepOn));
+  localStorage.setItem('sked-sleep-start',JSON.stringify(sleepStart));
+  localStorage.setItem('sked-sleep-end',JSON.stringify(sleepEnd));
+}
 
 const $=id=>document.getElementById(id);
 const mY=m=>minsToY(m)??0;
@@ -658,9 +665,9 @@ function updateSleepToggle(){
   $("sleep-time-section").style.display=sleepOn?"block":"none";
   rebuildGrid();
 }
-sleepToggle.onclick=()=>{ sleepOn=!sleepOn; updateSleepToggle(); };
-$("sleep-start").onchange=e=>{ sleepStart=+e.target.value; if(sleepOn) rebuildGrid(); };
-$("sleep-end").onchange=e=>{ sleepEnd=+e.target.value; if(sleepOn) rebuildGrid(); };
+sleepToggle.onclick=()=>{ sleepOn=!sleepOn; persistSleep(); updateSleepToggle(); };
+$("sleep-start").onchange=e=>{ sleepStart=+e.target.value; persistSleep(); if(sleepOn) rebuildGrid(); };
+$("sleep-end").onchange=e=>{ sleepEnd=+e.target.value; persistSleep(); if(sleepOn) rebuildGrid(); };
 updateSleepToggle();
 
 // Saved Days
