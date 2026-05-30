@@ -617,15 +617,17 @@ $("sleep-start").onchange=e=>{ sleepStart=+e.target.value; if(sleepOn) rebuildGr
 $("sleep-end").onchange=e=>{ sleepEnd=+e.target.value; if(sleepOn) rebuildGrid(); };
 updateSleepToggle();
 
-// ICS export
+// ICS export → Google Calendar
 function pad(n){ return String(n).padStart(2,'0'); }
 function toICSDate(dateObj, mins){
   const d = new Date(dateObj);
   d.setHours(Math.floor(mins/60), mins%60, 0, 0);
   return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+pad(d.getHours())+pad(d.getMinutes())+'00';
 }
-function exportICS(){
+async function exportICS(){
   if(!blocks.length){ alert("No blocks to export."); return; }
+  $("export-btn").textContent="uploading...";
+  $("export-btn").disabled=true;
   const lines = [
     'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Sked//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH',
   ];
@@ -648,11 +650,20 @@ function exportICS(){
   });
   lines.push('END:VCALENDAR');
   const content = lines.join('\r\n');
-  const encoded = encodeURIComponent(content);
-  const a = document.createElement('a');
-  a.href = 'data:text/calendar;charset=utf-8,' + encoded;
-  a.download = 'sked.ics';
-  a.click();
+
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([content],{type:'text/calendar'}), 'sked.ics');
+    const res = await fetch('https://0x0.st', {method:'POST', body:fd});
+    if(!res.ok) throw new Error('Upload failed');
+    const url = (await res.text()).trim();
+    window.open('https://calendar.google.com/calendar/r?cid='+encodeURIComponent(url));
+  } catch(e) {
+    alert('Upload failed. Try downloading the file instead and importing manually.');
+  } finally {
+    $("export-btn").textContent="↗ calendar";
+    $("export-btn").disabled=false;
+  }
 }
 $("export-btn").onclick=exportICS;
 
