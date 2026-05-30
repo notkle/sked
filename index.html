@@ -264,6 +264,9 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
       </div>
       <div style="color:rgba(255,255,255,0.3);font-size:16px;">›</div>
     </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Sleep mode</div>
         <div class="setting-sub">Hide sleep hours from schedule view</div>
       </div>
       <button class="toggle" id="sleep-toggle"></button>
@@ -560,10 +563,14 @@ function renderBlock(b){
 }
 
 let activeBlockId=null;
+function preventScroll(e){ e.preventDefault(); }
+function lockScroll(){ gridVert.addEventListener('touchmove', preventScroll, {passive:false}); gridVert.style.overflowY="hidden"; }
+function unlockScroll(){ gridVert.removeEventListener('touchmove', preventScroll); gridVert.style.overflowY="scroll"; }
+
 function deactivateAll(){
   document.querySelectorAll(".block.activated").forEach(e=>e.classList.remove("activated"));
   activeBlockId=null;
-  gridVert.style.overflowY="scroll";
+  unlockScroll();
 }
 
 function attachEvents(el,b){
@@ -574,7 +581,7 @@ function attachEvents(el,b){
       deactivateAll();
       el.classList.add("activated");
       activeBlockId=b.id;
-      gridVert.style.overflowY="hidden";
+      lockScroll();
       return;
     }
     // Second tap = open edit
