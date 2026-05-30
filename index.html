@@ -647,11 +647,12 @@ function exportICS(){
     );
   });
   lines.push('END:VCALENDAR');
-  const blob = new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
+  const content = lines.join('\r\n');
+  const encoded = encodeURIComponent(content);
   const a = document.createElement('a');
-  a.href=url; a.download='sked.ics'; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  a.href = 'data:text/calendar;charset=utf-8,' + encoded;
+  a.download = 'sked.ics';
+  a.click();
 }
 $("export-btn").onclick=exportICS;
 
