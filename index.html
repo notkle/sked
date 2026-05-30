@@ -257,7 +257,7 @@ const SAVED={
   ]
 };
 
-let blocks=[
+const DEFAULT_BLOCKS=[
   {id:1,day:0,label:"Sleep",startMins:0,duration:480,color:"#8e44ad"},
   {id:2,day:0,label:"Breakfast",startMins:510,duration:30,color:"#27ae60"},
   {id:3,day:0,label:"Deep work",startMins:570,duration:120,color:"#2980b9"},
@@ -273,6 +273,8 @@ let blocks=[
   {id:13,day:2,label:"Deep work",startMins:630,duration:90,color:"#2980b9"},
   {id:14,day:2,label:"Dinner",startMins:1080,duration:60,color:"#27ae60"},
 ];
+let blocks=JSON.parse(localStorage.getItem('sked-blocks')||'null')||DEFAULT_BLOCKS;
+function persistBlocks(){ localStorage.setItem('sked-blocks',JSON.stringify(blocks)); }
 let nextId=200,pendingMins=480,pendingDay=0,activeCat="Exercise",editId=null;
 let sleepOn=false, sleepStart=23*60, sleepEnd=7*60; // 11pm-7am default
 
@@ -533,7 +535,7 @@ function attachEvents(el,b){
       el.style.top=mY(b.startMins)+1+"px";
       updateTimeEl(el,b);
     };
-    const up=()=>{ window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
+    const up=()=>{ persistBlocks(); window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
     window.addEventListener("mousemove",move);
     window.addEventListener("mouseup",up);
     window.addEventListener("touchmove",move,{passive:true});
@@ -603,13 +605,13 @@ function renderNewModal(state={label:"",duration:60,color:"#2980b9"}){
   let cur={...state};
   $("new-name").focus(); $("new-name").oninput=e=>cur.label=e.target.value;
   bindModalControls(c=>{ cur.color=c; renderNewModal({...cur,label:$("new-name").value}); },d=>{ cur.duration=d; renderNewModal({...cur,label:$("new-name").value}); });
-  $("do-add").onclick=()=>{ const name=$("new-name").value.trim(); if(!name) return; const b={id:++nextId,day:pendingDay,label:name,duration:cur.duration,color:cur.color,startMins:pendingMins}; blocks.push(b); renderBlock(b); closeModal(); };
+  $("do-add").onclick=()=>{ const name=$("new-name").value.trim(); if(!name) return; const b={id:++nextId,day:pendingDay,label:name,duration:cur.duration,color:cur.color,startMins:pendingMins}; blocks.push(b); persistBlocks(); renderBlock(b); closeModal(); };
   $("do-cancel").onclick=closeModal;
 }
 
 function renderSavedModal(){
   modal.innerHTML=`<div class="modal-header"><span class="modal-title">Saved blocks</span><span class="modal-sub">${fmtTime(pendingMins)}</span></div><div class="chip-row">${Object.keys(SAVED).map(c=>`<button class="chip cat-chip${c===activeCat?" active":""}" data-cat="${c}">${c}</button>`).join("")}</div><div id="saved-list"></div><button class="btn-secondary" style="width:100%;margin-top:8px" id="do-cancel">Cancel</button>`;
-  const renderList=()=>{ $("saved-list").innerHTML=SAVED[activeCat].map(s=>`<div class="saved-item" data-sid="${s.id}" style="background:${hex2rgba(s.color,.1)};border:1px solid ${hex2rgba(s.color,.3)}"><div><div class="saved-name" style="color:${s.color}">${s.label}</div><div class="saved-dur">${durLabel(s.duration)}</div></div><div class="saved-plus">+</div></div>`).join(""); $("saved-list").querySelectorAll(".saved-item").forEach(el=>{ el.onclick=()=>{ const s=SAVED[activeCat].find(x=>x.id===el.dataset.sid); const b={id:++nextId,day:pendingDay,label:s.label,duration:s.duration,color:s.color,startMins:pendingMins}; blocks.push(b); renderBlock(b); closeModal(); }; }); };
+  const renderList=()=>{ $("saved-list").innerHTML=SAVED[activeCat].map(s=>`<div class="saved-item" data-sid="${s.id}" style="background:${hex2rgba(s.color,.1)};border:1px solid ${hex2rgba(s.color,.3)}"><div><div class="saved-name" style="color:${s.color}">${s.label}</div><div class="saved-dur">${durLabel(s.duration)}</div></div><div class="saved-plus">+</div></div>`).join(""); $("saved-list").querySelectorAll(".saved-item").forEach(el=>{ el.onclick=()=>{ const s=SAVED[activeCat].find(x=>x.id===el.dataset.sid); const b={id:++nextId,day:pendingDay,label:s.label,duration:s.duration,color:s.color,startMins:pendingMins}; blocks.push(b); persistBlocks(); renderBlock(b); closeModal(); }; }); };
   renderList();
   modal.querySelectorAll(".cat-chip").forEach(c=>c.onclick=()=>{ activeCat=c.dataset.cat; renderSavedModal(); });
   $("do-cancel").onclick=closeModal;
@@ -620,8 +622,8 @@ function renderEditModal(state){
   modal.innerHTML=`<div class="modal-header"><span class="modal-title">Edit block</span></div><input class="text-input" id="edit-name" value="${state.label}"/><div class="field-label">Duration</div><div class="chip-row">${durChipsHTML(state.duration)}</div><div class="field-label">Color</div><div class="color-row">${colorDotsHTML(state.color)}</div><div class="btn-row"><button class="btn-primary" id="do-save">Save</button><button class="btn-danger" id="do-delete">Delete</button><button class="btn-secondary" id="do-cancel">✕</button></div>`;
   let cur={...state};
   bindModalControls(c=>{ cur.color=c; renderEditModal({...cur,label:$("edit-name").value}); },d=>{ cur.duration=d; renderEditModal({...cur,label:$("edit-name").value}); });
-  $("do-save").onclick=()=>{ const name=$("edit-name").value.trim(); if(!name) return; const idx=blocks.findIndex(x=>x.id===editId); if(idx>-1){ blocks[idx]={...blocks[idx],...cur,label:name}; } renderBlocks(); closeModal(); };
-  $("do-delete").onclick=()=>{ blocks=blocks.filter(x=>x.id!==editId); renderBlocks(); closeModal(); };
+  $("do-save").onclick=()=>{ const name=$("edit-name").value.trim(); if(!name) return; const idx=blocks.findIndex(x=>x.id===editId); if(idx>-1){ blocks[idx]={...blocks[idx],...cur,label:name}; } persistBlocks(); renderBlocks(); closeModal(); };
+  $("do-delete").onclick=()=>{ blocks=blocks.filter(x=>x.id!==editId); persistBlocks(); renderBlocks(); closeModal(); };
   $("do-cancel").onclick=closeModal;
 }
 
@@ -677,11 +679,24 @@ document.addEventListener("click",e=>{ if(!e.target.closest("#day-popup")&&!e.ta
 
 $("dp-save").onclick=()=>{
   const d=dayPopupDay; hideDayPopup();
-  const name=prompt("Name this day:","My Day");
-  if(!name||!name.trim()) return;
   const dayBlocks=blocks.filter(b=>b.day===d).map(b=>({label:b.label,startMins:b.startMins,duration:b.duration,color:b.color}));
-  savedDays.push({id:Date.now(),name:name.trim(),blocks:dayBlocks});
-  persistSavedDays();
+  // Use inline modal instead of prompt()
+  overlay.style.display="flex";
+  modal.innerHTML=`
+    <div class="modal-header"><span class="modal-title">Save day</span></div>
+    <input class="text-input" id="save-day-name" placeholder="Name this day" value="My Day"/>
+    <div class="btn-row">
+      <button class="btn-primary" id="do-save-day">Save</button>
+      <button class="btn-secondary" id="do-cancel-save">Cancel</button>
+    </div>`;
+  const inp=$("save-day-name");
+  inp.focus(); inp.select();
+  $("do-save-day").onclick=()=>{
+    const name=inp.value.trim(); if(!name) return;
+    savedDays.push({id:Date.now(),name,blocks:dayBlocks});
+    persistSavedDays(); closeModal();
+  };
+  $("do-cancel-save").onclick=closeModal;
 };
 
 $("dp-load").onclick=()=>{
@@ -717,7 +732,7 @@ function renderSavedDays(){
       applyBtn.onclick=()=>{
         blocks=blocks.filter(b=>b.day!==sdTargetDay);
         day.blocks.forEach(b=>{ blocks.push({id:++nextId,day:sdTargetDay,...b}); });
-        renderBlocks(); sddPanel.style.display="none";
+        persistBlocks(); renderBlocks(); sddPanel.style.display="none";
       };
       prev.appendChild(applyBtn);
       wrap.appendChild(prev);
@@ -726,8 +741,36 @@ function renderSavedDays(){
     item.className="sd-item";
     item.innerHTML=`<div><div class="sd-item-name">${day.name}</div><div class="sd-item-count">${day.blocks.length} block${day.blocks.length!==1?'s':''}</div></div><div class="sd-item-actions"><button class="chip" data-rename="${day.id}" style="font-size:10px;padding:4px 8px;">rename</button><button class="chip" data-delete="${day.id}" style="font-size:10px;padding:4px 8px;color:#e74c3c;border-color:rgba(231,76,60,0.3);">✕</button></div>`;
     item.addEventListener("click",e=>{
-      if(e.target.dataset.rename){ const n=prompt("Rename:",day.name); if(n&&n.trim()){ day.name=n.trim(); persistSavedDays(); renderSavedDays(); } return; }
-      if(e.target.dataset.delete){ if(confirm(`Delete "${day.name}"?`)){ savedDays=savedDays.filter(x=>x.id!==day.id); persistSavedDays(); renderSavedDays(); } return; }
+      if(e.target.dataset.rename){
+        const renameId=+e.target.dataset.rename;
+        const renameDay=savedDays.find(x=>x.id===renameId);
+        overlay.style.display="flex";
+        modal.innerHTML=`
+          <div class="modal-header"><span class="modal-title">Rename day</span></div>
+          <input class="text-input" id="rename-day-input" value="${renameDay.name}"/>
+          <div class="btn-row">
+            <button class="btn-primary" id="do-rename-day">Save</button>
+            <button class="btn-secondary" id="do-cancel-rename">Cancel</button>
+          </div>`;
+        const ri=$("rename-day-input"); ri.focus(); ri.select();
+        $("do-rename-day").onclick=()=>{ const n=ri.value.trim(); if(n){ renameDay.name=n; persistSavedDays(); closeModal(); renderSavedDays(); } };
+        $("do-cancel-rename").onclick=closeModal;
+        return;
+      }
+      if(e.target.dataset.delete){
+        const delId=+e.target.dataset.delete;
+        const delDay=savedDays.find(x=>x.id===delId);
+        overlay.style.display="flex";
+        modal.innerHTML=`
+          <div class="modal-header"><span class="modal-title">Delete "${delDay.name}"?</span></div>
+          <div class="btn-row">
+            <button class="btn-danger" id="do-confirm-delete" style="flex:1">Delete</button>
+            <button class="btn-secondary" id="do-cancel-delete">Cancel</button>
+          </div>`;
+        $("do-confirm-delete").onclick=()=>{ savedDays=savedDays.filter(x=>x.id!==delId); persistSavedDays(); closeModal(); renderSavedDays(); };
+        $("do-cancel-delete").onclick=closeModal;
+        return;
+      }
       sdPreviewId=sdPreviewId===day.id?null:day.id; renderSavedDays();
     });
     wrap.appendChild(item);
