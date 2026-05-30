@@ -99,6 +99,22 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
 .day-popup-btn:last-child{margin-bottom:0;}
 .day-popup-btn.danger{color:#e74c3c;background:rgba(231,76,60,0.08);border-color:rgba(231,76,60,0.2);}
 #settings-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:70;display:none;align-items:flex-end;justify-content:center;}
+
+/* Edit saves panel */
+#editsaves-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:80;display:none;align-items:flex-end;justify-content:center;}
+#editsaves-box{background:#16161f;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:84vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-bottom:none;}
+.es-folder{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px;overflow:hidden;}
+.es-folder-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;}
+.es-folder-name{font-size:13px;font-weight:600;}
+.es-folder-count{font-size:11px;color:rgba(255,255,255,0.3);margin-left:6px;}
+.es-saves{padding:0 10px 10px;}
+.es-save-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:6px;}
+.es-save-name{font-size:12px;font-weight:500;}
+.es-save-count{font-size:10px;color:rgba(255,255,255,0.3);}
+.es-actions{display:flex;gap:5px;flex-shrink:0;}
+.es-btn{padding:4px 9px;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);}
+.es-btn.red{color:#e74c3c;border-color:rgba(231,76,60,0.3);background:rgba(231,76,60,0.07);}
+.es-add-folder{width:100%;padding:11px 0;background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.12);border-radius:11px;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;font-family:inherit;margin-top:6px;}
 #settings-box{background:#16161f;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;border:1px solid rgba(255,255,255,0.08);border-bottom:none;}
 .settings-title{font-size:15px;font-weight:600;margin-bottom:20px;}
 .setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
@@ -200,6 +216,17 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
   </div>
 </div>
 
+<div id="editsaves-panel">
+  <div id="editsaves-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <div style="font-size:15px;font-weight:600;">Edit saves</div>
+      <button id="editsaves-close" style="background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;">×</button>
+    </div>
+    <div id="es-content"></div>
+    <button class="es-add-folder" id="es-add-folder-btn">+ add folder</button>
+  </div>
+</div>
+
 <div id="overlay"><div id="modal"></div></div>
 <div id="settings-panel">
   <div id="settings-box">
@@ -207,9 +234,13 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
       <div class="settings-title">Settings</div>
       <button id="settings-close" style="background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;">×</button>
     </div>
-    <div class="setting-row">
+    <div class="setting-row" style="cursor:pointer;" id="edit-saves-btn">
       <div>
-        <div class="setting-label">Sleep mode</div>
+        <div class="setting-label">Edit saves</div>
+        <div class="setting-sub">Manage saved days and folders</div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:16px;">›</div>
+    </div>
         <div class="setting-sub">Hide sleep hours from schedule view</div>
       </div>
       <button class="toggle" id="sleep-toggle"></button>
@@ -670,10 +701,15 @@ $("sleep-start").onchange=e=>{ sleepStart=+e.target.value; persistSleep(); if(sl
 $("sleep-end").onchange=e=>{ sleepEnd=+e.target.value; persistSleep(); if(sleepOn) rebuildGrid(); };
 updateSleepToggle();
 
-// Saved Days
-let savedDays=JSON.parse(localStorage.getItem('sked-saved-days')||'[]');
-let dayPopupDay=null;
-function persistSavedDays(){ localStorage.setItem('sked-saved-days',JSON.stringify(savedDays)); }
+// Saved Days — folder structure: [{id, name, saves:[{id,name,blocks}]}]
+function migrateSavedDays(raw){
+  // migrate old flat array to folder structure
+  if(!raw.length) return [{id:1,name:"Saved Days",saves:[]}];
+  if(raw[0] && raw[0].saves !== undefined) return raw; // already new format
+  return [{id:1,name:"Saved Days",saves:raw}];
+}
+let folders=migrateSavedDays(JSON.parse(localStorage.getItem('sked-saved-days')||'[]'));
+function persistSavedDays(){ localStorage.setItem('sked-saved-days',JSON.stringify(folders)); }
 
 const dayPopup=$("day-popup");
 function showDayPopup(d,rect){
@@ -687,21 +723,24 @@ document.addEventListener("click",e=>{ if(!e.target.closest("#day-popup")&&!e.ta
 $("dp-save").onclick=()=>{
   const d=dayPopupDay; hideDayPopup();
   const dayBlocks=blocks.filter(b=>b.day===d).map(b=>({label:b.label,startMins:b.startMins,duration:b.duration,color:b.color}));
-  // Use inline modal instead of prompt()
   overlay.style.display="flex";
+  const folderOpts=folders.map(f=>`<option value="${f.id}">${f.name}</option>`).join("");
   modal.innerHTML=`
     <div class="modal-header"><span class="modal-title">Save day</span></div>
     <input class="text-input" id="save-day-name" placeholder="Name this day" value="My Day"/>
+    <div class="field-label">Folder</div>
+    <select class="text-input" id="save-day-folder" style="margin-bottom:14px;">${folderOpts}</select>
     <div class="btn-row">
       <button class="btn-primary" id="do-save-day">Save</button>
       <button class="btn-secondary" id="do-cancel-save">Cancel</button>
     </div>`;
-  const inp=$("save-day-name");
-  inp.focus(); inp.select();
+  const inp=$("save-day-name"); inp.focus(); inp.select();
   $("do-save-day").onclick=()=>{
     const name=inp.value.trim(); if(!name) return;
-    savedDays.push({id:Date.now(),name,blocks:dayBlocks});
-    persistSavedDays(); closeModal();
+    const folderId=+$("save-day-folder").value;
+    const folder=folders.find(f=>f.id===folderId);
+    if(folder){ folder.saves.push({id:Date.now(),name,blocks:dayBlocks}); persistSavedDays(); }
+    closeModal();
   };
   $("do-cancel-save").onclick=closeModal;
 };
@@ -719,68 +758,134 @@ sddPanel.addEventListener("click",e=>{ if(e.target===sddPanel) sddPanel.style.di
 
 function renderSavedDays(){
   const c=$("sd-content");
-  if(!savedDays.length){
+  const allSaves=folders.flatMap(f=>f.saves);
+  if(!allSaves.length){
     c.innerHTML=`<div class="sd-empty">No saved days yet.<br>Tap a day header to save one.</div>`;
     return;
   }
   c.innerHTML="";
-  savedDays.forEach(day=>{
-    const wrap=document.createElement("div");
-    if(sdPreviewId===day.id){
-      const prev=document.createElement("div");
-      prev.className="sd-preview";
-      prev.innerHTML=day.blocks.length
-        ? day.blocks.map(b=>`<div class="sd-preview-block"><div class="sd-preview-dot" style="background:${b.color}"></div><div class="sd-preview-name">${b.label}</div><div class="sd-preview-time">${fmtTime(b.startMins)}–${fmtTime(b.startMins+b.duration)}</div></div>`).join("")
-        : `<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:4px 0">Empty day</div>`;
-      const applyBtn=document.createElement("button");
-      applyBtn.className="btn-primary";
-      applyBtn.style.cssText="width:100%;margin-top:10px;padding:11px 0;font-size:13px;";
-      applyBtn.textContent="Apply to schedule";
-      applyBtn.onclick=()=>{
-        blocks=blocks.filter(b=>b.day!==sdTargetDay);
-        day.blocks.forEach(b=>{ blocks.push({id:++nextId,day:sdTargetDay,...b}); });
-        persistBlocks(); renderBlocks(); sddPanel.style.display="none";
-      };
-      prev.appendChild(applyBtn);
-      wrap.appendChild(prev);
-    }
-    const item=document.createElement("div");
-    item.className="sd-item";
-    item.innerHTML=`<div><div class="sd-item-name">${day.name}</div><div class="sd-item-count">${day.blocks.length} block${day.blocks.length!==1?'s':''}</div></div><div class="sd-item-actions"><button class="chip" data-rename="${day.id}" style="font-size:10px;padding:4px 8px;">rename</button><button class="chip" data-delete="${day.id}" style="font-size:10px;padding:4px 8px;color:#e74c3c;border-color:rgba(231,76,60,0.3);">✕</button></div>`;
-    item.addEventListener("click",e=>{
-      if(e.target.dataset.rename){
-        const renameId=+e.target.dataset.rename;
-        const renameDay=savedDays.find(x=>x.id===renameId);
-        overlay.style.display="flex";
-        modal.innerHTML=`
-          <div class="modal-header"><span class="modal-title">Rename day</span></div>
-          <input class="text-input" id="rename-day-input" value="${renameDay.name}"/>
-          <div class="btn-row">
-            <button class="btn-primary" id="do-rename-day">Save</button>
-            <button class="btn-secondary" id="do-cancel-rename">Cancel</button>
-          </div>`;
-        const ri=$("rename-day-input"); ri.focus(); ri.select();
-        $("do-rename-day").onclick=()=>{ const n=ri.value.trim(); if(n){ renameDay.name=n; persistSavedDays(); closeModal(); renderSavedDays(); } };
-        $("do-cancel-rename").onclick=closeModal;
-        return;
+  folders.forEach(folder=>{
+    if(!folder.saves.length) return;
+    const fh=document.createElement("div");
+    fh.style.cssText="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;font-weight:500;margin:12px 0 6px;padding:0 2px;";
+    fh.textContent=folder.name;
+    c.appendChild(fh);
+    folder.saves.forEach(day=>{
+      const wrap=document.createElement("div");
+      if(sdPreviewId===day.id){
+        const prev=document.createElement("div");
+        prev.className="sd-preview";
+        prev.innerHTML=day.blocks.length
+          ? day.blocks.map(b=>`<div class="sd-preview-block"><div class="sd-preview-dot" style="background:${b.color}"></div><div class="sd-preview-name">${b.label}</div><div class="sd-preview-time">${fmtTime(b.startMins)}–${fmtTime(b.startMins+b.duration)}</div></div>`).join("")
+          : `<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:4px 0">Empty day</div>`;
+        const applyBtn=document.createElement("button");
+        applyBtn.className="btn-primary";
+        applyBtn.style.cssText="width:100%;margin-top:10px;padding:11px 0;font-size:13px;";
+        applyBtn.textContent="Apply to schedule";
+        applyBtn.onclick=()=>{
+          blocks=blocks.filter(b=>b.day!==sdTargetDay);
+          day.blocks.forEach(b=>{ blocks.push({id:++nextId,day:sdTargetDay,...b}); });
+          persistBlocks(); renderBlocks(); sddPanel.style.display="none";
+        };
+        prev.appendChild(applyBtn);
+        wrap.appendChild(prev);
       }
-      if(e.target.dataset.delete){
-        const delId=+e.target.dataset.delete;
-        const delDay=savedDays.find(x=>x.id===delId);
-        overlay.style.display="flex";
-        modal.innerHTML=`
-          <div class="modal-header"><span class="modal-title">Delete "${delDay.name}"?</span></div>
-          <div class="btn-row">
-            <button class="btn-danger" id="do-confirm-delete" style="flex:1">Delete</button>
-            <button class="btn-secondary" id="do-cancel-delete">Cancel</button>
-          </div>`;
-        $("do-confirm-delete").onclick=()=>{ savedDays=savedDays.filter(x=>x.id!==delId); persistSavedDays(); closeModal(); renderSavedDays(); };
-        $("do-cancel-delete").onclick=closeModal;
-        return;
-      }
-      sdPreviewId=sdPreviewId===day.id?null:day.id; renderSavedDays();
+      const item=document.createElement("div");
+      item.className="sd-item";
+      item.innerHTML=`<div><div class="sd-item-name">${day.name}</div><div class="sd-item-count">${day.blocks.length} block${day.blocks.length!==1?'s':''}</div></div><div class="sd-item-actions"><button class="chip" data-rename="${day.id}" style="font-size:10px;padding:4px 8px;">rename</button><button class="chip" data-delete="${day.id}" style="font-size:10px;padding:4px 8px;color:#e74c3c;border-color:rgba(231,76,60,0.3);">✕</button></div>`;
+      item.addEventListener("click",e=>{
+        if(e.target.dataset.rename){
+          const renameId=+e.target.dataset.rename;
+          const renameDay=folders.flatMap(f=>f.saves).find(x=>x.id===renameId);
+          overlay.style.display="flex";
+          modal.innerHTML=`<div class="modal-header"><span class="modal-title">Rename day</span></div><input class="text-input" id="rename-day-input" value="${renameDay.name}"/><div class="btn-row"><button class="btn-primary" id="do-rename-day">Save</button><button class="btn-secondary" id="do-cancel-rename">Cancel</button></div>`;
+          const ri=$("rename-day-input"); ri.focus(); ri.select();
+          $("do-rename-day").onclick=()=>{ const n=ri.value.trim(); if(n){ renameDay.name=n; persistSavedDays(); closeModal(); renderSavedDays(); } };
+          $("do-cancel-rename").onclick=closeModal;
+          return;
+        }
+        if(e.target.dataset.delete){
+          const delId=+e.target.dataset.delete;
+          const delDay=folders.flatMap(f=>f.saves).find(x=>x.id===delId);
+          overlay.style.display="flex";
+          modal.innerHTML=`<div class="modal-header"><span class="modal-title">Delete "${delDay.name}"?</span></div><div class="btn-row"><button class="btn-danger" id="do-confirm-delete" style="flex:1">Delete</button><button class="btn-secondary" id="do-cancel-delete">Cancel</button></div>`;
+          $("do-confirm-delete").onclick=()=>{ folders.forEach(f=>{ f.saves=f.saves.filter(x=>x.id!==delId); }); persistSavedDays(); closeModal(); renderSavedDays(); };
+          $("do-cancel-delete").onclick=closeModal;
+          return;
+        }
+        sdPreviewId=sdPreviewId===day.id?null:day.id; renderSavedDays();
+      });
+      wrap.appendChild(item);
+      c.appendChild(wrap);
     });
-    wrap.appendChild(item);
+  });
+}
+
+// Edit saves panel
+const esPanel=$("editsaves-panel");
+$("editsaves-close").onclick=()=>{ esPanel.style.display="none"; };
+esPanel.addEventListener("click",e=>{ if(e.target===esPanel) esPanel.style.display="none"; });
+$("edit-saves-btn").onclick=()=>{ settingsPanel.style.display="none"; esPanel.style.display="flex"; renderEditSaves(); };
+
+$("es-add-folder-btn").onclick=()=>{
+  overlay.style.display="flex";
+  modal.innerHTML=`<div class="modal-header"><span class="modal-title">New folder</span></div><input class="text-input" id="new-folder-name" placeholder="Folder name"/><div class="btn-row"><button class="btn-primary" id="do-add-folder">Create</button><button class="btn-secondary" id="do-cancel-folder">Cancel</button></div>`;
+  const inp=$("new-folder-name"); inp.focus();
+  $("do-add-folder").onclick=()=>{ const n=inp.value.trim(); if(n){ folders.push({id:Date.now(),name:n,saves:[]}); persistSavedDays(); closeModal(); renderEditSaves(); } };
+  $("do-cancel-folder").onclick=closeModal;
+};
+
+function renderEditSaves(){
+  const c=$("es-content"); c.innerHTML="";
+  if(!folders.length){ c.innerHTML=`<div class="sd-empty">No folders yet.</div>`; return; }
+  folders.forEach(folder=>{
+    const wrap=document.createElement("div"); wrap.className="es-folder";
+    const hdr=document.createElement("div"); hdr.className="es-folder-header";
+    hdr.innerHTML=`<div style="display:flex;align-items:center;"><span class="es-folder-name">${folder.name}</span><span class="es-folder-count">${folder.saves.length} save${folder.saves.length!==1?'s':''}</span></div><div class="es-actions"><button class="es-btn" data-rename-folder="${folder.id}">rename</button><button class="es-btn red" data-delete-folder="${folder.id}">✕</button></div>`;
+    hdr.addEventListener("click",e=>{
+      if(e.target.dataset.renameFolder){
+        const f=folders.find(x=>x.id===+e.target.dataset.renameFolder);
+        overlay.style.display="flex";
+        modal.innerHTML=`<div class="modal-header"><span class="modal-title">Rename folder</span></div><input class="text-input" id="rename-folder-input" value="${f.name}"/><div class="btn-row"><button class="btn-primary" id="do-rename-folder">Save</button><button class="btn-secondary" id="do-cancel-rf">Cancel</button></div>`;
+        const ri=$("rename-folder-input"); ri.focus(); ri.select();
+        $("do-rename-folder").onclick=()=>{ const n=ri.value.trim(); if(n){ f.name=n; persistSavedDays(); closeModal(); renderEditSaves(); } };
+        $("do-cancel-rf").onclick=closeModal; return;
+      }
+      if(e.target.dataset.deleteFolder){
+        const f=folders.find(x=>x.id===+e.target.dataset.deleteFolder);
+        overlay.style.display="flex";
+        modal.innerHTML=`<div class="modal-header"><span class="modal-title">Delete folder "${f.name}"?</span></div><div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">All ${f.saves.length} save${f.saves.length!==1?'s':''} inside will be deleted.</div><div class="btn-row"><button class="btn-danger" id="do-confirm-df" style="flex:1">Delete</button><button class="btn-secondary" id="do-cancel-df">Cancel</button></div>`;
+        $("do-confirm-df").onclick=()=>{ folders=folders.filter(x=>x.id!==f.id); persistSavedDays(); closeModal(); renderEditSaves(); };
+        $("do-cancel-df").onclick=closeModal;
+      }
+    });
+    wrap.appendChild(hdr);
+    if(folder.saves.length){
+      const savesDiv=document.createElement("div"); savesDiv.className="es-saves";
+      folder.saves.forEach(save=>{
+        const si=document.createElement("div"); si.className="es-save-item";
+        si.innerHTML=`<div><div class="es-save-name">${save.name}</div><div class="es-save-count">${save.blocks.length} blocks</div></div><div class="es-actions"><button class="es-btn" data-rename-save="${save.id}">rename</button><button class="es-btn red" data-delete-save="${save.id}">✕</button></div>`;
+        si.addEventListener("click",e=>{
+          if(e.target.dataset.renameSave){
+            const s=folders.flatMap(f=>f.saves).find(x=>x.id===+e.target.dataset.renameSave);
+            overlay.style.display="flex";
+            modal.innerHTML=`<div class="modal-header"><span class="modal-title">Rename save</span></div><input class="text-input" id="rename-save-input" value="${s.name}"/><div class="btn-row"><button class="btn-primary" id="do-rename-save">Save</button><button class="btn-secondary" id="do-cancel-rs">Cancel</button></div>`;
+            const ri=$("rename-save-input"); ri.focus(); ri.select();
+            $("do-rename-save").onclick=()=>{ const n=ri.value.trim(); if(n){ s.name=n; persistSavedDays(); closeModal(); renderEditSaves(); } };
+            $("do-cancel-rs").onclick=closeModal; return;
+          }
+          if(e.target.dataset.deleteSave){
+            const s=folders.flatMap(f=>f.saves).find(x=>x.id===+e.target.dataset.deleteSave);
+            overlay.style.display="flex";
+            modal.innerHTML=`<div class="modal-header"><span class="modal-title">Delete "${s.name}"?</span></div><div class="btn-row"><button class="btn-danger" id="do-confirm-ds" style="flex:1">Delete</button><button class="btn-secondary" id="do-cancel-ds">Cancel</button></div>`;
+            $("do-confirm-ds").onclick=()=>{ folders.forEach(f=>{ f.saves=f.saves.filter(x=>x.id!==s.id); }); persistSavedDays(); closeModal(); renderEditSaves(); };
+            $("do-cancel-ds").onclick=closeModal;
+          }
+        });
+        savesDiv.appendChild(si);
+      });
+      wrap.appendChild(savesDiv);
+    }
     c.appendChild(wrap);
   });
 }
