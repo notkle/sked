@@ -345,6 +345,8 @@ function persistSleep(){
 const $=id=>document.getElementById(id);
 const mY=m=>minsToY(m)??0;
 const yM=y=>yToMins(y);
+const durToH=d=>(d/60)*HOUR_H;  // duration in mins → raw pixels, never sleep-transformed
+const yDelta=dy=>(dy/HOUR_H)*60; // raw pixel delta → minutes, never sleep-transformed
 const snap=m=>Math.round(m/SNAP)*SNAP;
 const clamp=(m,dur=30)=>Math.max(0,Math.min(m,TOTAL-dur));
 const hex2rgba=(hex,a)=>{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `rgba(${r},${g},${b},${a})`;};
@@ -554,8 +556,8 @@ function renderBlock(b){
   const col=dayCols[b.day]; if(!col) return;
   const el=document.createElement("div");
   el.className="block"; el.dataset.id=b.id;
-  const h=mY(b.duration);
-  el.style.cssText=`top:${mY(b.startMins)+1}px;height:${h-2}px;background:${hex2rgba(b.color,.25)};border:1px solid ${hex2rgba(b.color,.6)};`;
+  const h=durToH(b.duration);
+  el.style.cssText=`top:${mY(b.startMins)+1}px;height:${durToH(b.duration)-2}px;background:${hex2rgba(b.color,.25)};border:1px solid ${hex2rgba(b.color,.6)};`;
   const showTime=h>28;
   el.innerHTML=`<div class="block-label" style="color:${b.color}">${b.label}</div>${showTime?`<div class="block-time">${fmtTime(b.startMins)}–${fmtTime(b.startMins+b.duration)}</div>`:""}<div class="block-handle"><div class="handle-bar" style="background:${hex2rgba(b.color,.5)}"></div></div>`;
   col.appendChild(el);
@@ -627,7 +629,7 @@ function attachEvents(el,b){
   // Resize — only if activated
   const doResize=startY=>{
     const origDur=b.duration;
-    const move=ev=>{ const cy=ev.clientY??ev.touches?.[0]?.clientY; b.duration=Math.max(30,snap(origDur+yM(cy-startY))); el.style.height=mY(b.duration)-2+"px"; updateTimeEl(el,b); };
+    const move=ev=>{ const cy=ev.clientY??ev.touches?.[0]?.clientY; b.duration=Math.max(30,snap(origDur+yDelta(cy-startY))); el.style.height=durToH(b.duration)-2+"px"; updateTimeEl(el,b); };
     const up=()=>{ window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
     window.addEventListener("mousemove",move); window.addEventListener("mouseup",up); window.addEventListener("touchmove",move,{passive:true}); window.addEventListener("touchend",up);
   };
@@ -637,7 +639,7 @@ function attachEvents(el,b){
 }
 
 function updateTimeEl(el,b){
-  const h=mY(b.duration); const showTime=h>28;
+  const h=durToH(b.duration); const showTime=h>28;
   let t=el.querySelector(".block-time");
   if(showTime){ if(!t){ t=document.createElement("div"); t.className="block-time"; el.insertBefore(t,el.querySelector(".block-handle")); } t.textContent=`${fmtTime(b.startMins)}–${fmtTime(b.startMins+b.duration)}`; }
   else { if(t) t.remove(); }
