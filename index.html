@@ -63,15 +63,41 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
 #hscroll-thumb{position:absolute;top:50%;transform:translateY(-50%);height:20px;border-radius:10px;background:#1e1e28;border:1px solid rgba(255,255,255,0.1);cursor:grab;touch-action:none;transition:background .15s;}
 #hscroll-thumb:hover,#hscroll-thumb.dragging{background:#25252f;}
 
-/* Vertical scrollbar */
-#grid-vert::-webkit-scrollbar{width:3px;}
-#grid-vert::-webkit-scrollbar-track{background:transparent;}
-#grid-vert::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
-#grid-vert{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;}
+/* Vertical scrollbar — hidden on mobile, thin on desktop */
+#grid-vert::-webkit-scrollbar{width:0;}
+#grid-vert{scrollbar-width:none;}
+@media (hover:hover){
+  #grid-vert::-webkit-scrollbar{width:3px;}
+  #grid-vert::-webkit-scrollbar-track{background:transparent;}
+  #grid-vert::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:3px;}
+  #grid-vert{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.12) transparent;}
+}
 
 
 
-/* Settings panel */
+/* Saved days panel */
+#saveddays-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:70;display:none;align-items:flex-end;justify-content:center;}
+#saveddays-box{background:#16161f;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:82vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-bottom:none;}
+.sd-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.sd-title{font-size:15px;font-weight:600;}
+.sd-item{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:11px;margin-bottom:8px;cursor:pointer;transition:background .12s;}
+.sd-item:hover{background:rgba(255,255,255,0.08);}
+.sd-item-name{font-size:13px;font-weight:500;}
+.sd-item-count{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.sd-item-actions{display:flex;gap:6px;}
+.sd-preview{background:rgba(255,255,255,0.03);border-radius:10px;padding:10px 12px;margin-bottom:14px;}
+.sd-preview-block{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.sd-preview-block:last-child{border-bottom:none;}
+.sd-preview-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.sd-preview-name{font-size:12px;font-weight:500;}
+.sd-preview-time{font-size:11px;color:rgba(255,255,255,0.35);margin-left:auto;}
+.sd-empty{text-align:center;padding:30px 0;font-size:13px;color:rgba(255,255,255,0.25);}
+
+/* Day header tap popup */
+#day-popup{position:fixed;background:#1a1a24;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:10px 12px;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.7);display:none;min-width:160px;}
+.day-popup-btn{width:100%;padding:9px 0;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;margin-bottom:6px;}
+.day-popup-btn:last-child{margin-bottom:0;}
+.day-popup-btn.danger{color:#e74c3c;background:rgba(231,76,60,0.08);border-color:rgba(231,76,60,0.2);}
 #settings-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:70;display:none;align-items:flex-end;justify-content:center;}
 #settings-box{background:#16161f;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;border:1px solid rgba(255,255,255,0.08);border-bottom:none;}
 .settings-title{font-size:15px;font-weight:600;margin-bottom:20px;}
@@ -122,7 +148,6 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
   <div id="navbar">
     <div id="nav-logo">sk<span>ed</span></div>
     <div id="nav-right">
-    <button class="nav-btn" id="export-btn">↗ calendar</button>
     <button class="nav-btn" id="settings-btn">⚙ settings</button>
     </div>
   </div>
@@ -160,6 +185,21 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
     <button id="pop-close">×</button>
   </div>
 </div>
+<div id="day-popup">
+  <button class="day-popup-btn" id="dp-save">💾 save day</button>
+  <button class="day-popup-btn" id="dp-load">📂 saved days</button>
+</div>
+
+<div id="saveddays-panel">
+  <div id="saveddays-box">
+    <div class="sd-header">
+      <div class="sd-title" id="sd-title">Saved Days</div>
+      <button id="sd-close" style="background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;">×</button>
+    </div>
+    <div id="sd-content"></div>
+  </div>
+</div>
+
 <div id="overlay"><div id="modal"></div></div>
 <div id="settings-panel">
   <div id="settings-box">
@@ -312,6 +352,10 @@ for(let d=0;d<NUM_DAYS;d++){
   div.className="day-header"+(d===0?" today":"");
   div.style.width=DAY_W+"px";
   div.innerHTML=`<div class="dname">${date.toLocaleDateString("en-US",{weekday:"short"})}</div><div class="dnum">${date.getDate()}</div>`;
+  div.addEventListener("click", e=>{
+    e.stopPropagation();
+    showDayPopup(d, div.getBoundingClientRect());
+  });
   dayHeadersEl.appendChild(div);
 }
 
@@ -617,43 +661,79 @@ $("sleep-start").onchange=e=>{ sleepStart=+e.target.value; if(sleepOn) rebuildGr
 $("sleep-end").onchange=e=>{ sleepEnd=+e.target.value; if(sleepOn) rebuildGrid(); };
 updateSleepToggle();
 
-// ICS export → Google Calendar
-function pad(n){ return String(n).padStart(2,'0'); }
-function toICSDate(dateObj, mins){
-  const d = new Date(dateObj);
-  d.setHours(Math.floor(mins/60), mins%60, 0, 0);
-  return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+pad(d.getHours())+pad(d.getMinutes())+'00';
+// Saved Days
+let savedDays=JSON.parse(localStorage.getItem('sked-saved-days')||'[]');
+let dayPopupDay=null;
+function persistSavedDays(){ localStorage.setItem('sked-saved-days',JSON.stringify(savedDays)); }
+
+const dayPopup=$("day-popup");
+function showDayPopup(d,rect){
+  dayPopupDay=d; dayPopup.style.display="block";
+  dayPopup.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-170))+"px";
+  dayPopup.style.top=(rect.bottom+6)+"px";
 }
-function exportICS(){
-  if(!blocks.length){ alert("No blocks to export."); return; }
-  const lines = [
-    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Sked//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH',
-  ];
-  blocks.forEach(b=>{
-    const date = new Date(now);
-    date.setDate(now.getDate() + b.day);
-    const dtstart = toICSDate(date, b.startMins);
-    const dtend   = toICSDate(date, b.startMins + b.duration);
-    lines.push(
-      'BEGIN:VEVENT',
-      `UID:sked-${b.id}-${dtstart}@sked`,
-      `DTSTART:${dtstart}`,
-      `DTEND:${dtend}`,
-      `SUMMARY:${b.label}`,
-      'BEGIN:VALARM','TRIGGER:-PT5M','ACTION:DISPLAY',
-      `DESCRIPTION:${b.label} starts in 5 minutes`,
-      'END:VALARM',
-      'END:VEVENT'
-    );
+function hideDayPopup(){ dayPopup.style.display="none"; dayPopupDay=null; }
+document.addEventListener("click",e=>{ if(!e.target.closest("#day-popup")&&!e.target.closest(".day-header")) hideDayPopup(); });
+
+$("dp-save").onclick=()=>{
+  const d=dayPopupDay; hideDayPopup();
+  const name=prompt("Name this day:","My Day");
+  if(!name||!name.trim()) return;
+  const dayBlocks=blocks.filter(b=>b.day===d).map(b=>({label:b.label,startMins:b.startMins,duration:b.duration,color:b.color}));
+  savedDays.push({id:Date.now(),name:name.trim(),blocks:dayBlocks});
+  persistSavedDays();
+};
+
+$("dp-load").onclick=()=>{
+  const d=dayPopupDay; hideDayPopup();
+  sdTargetDay=d; sdPreviewId=null;
+  sddPanel.style.display="flex"; renderSavedDays();
+};
+
+const sddPanel=$("saveddays-panel");
+let sdTargetDay=null,sdPreviewId=null;
+$("sd-close").onclick=()=>{ sddPanel.style.display="none"; };
+sddPanel.addEventListener("click",e=>{ if(e.target===sddPanel) sddPanel.style.display="none"; });
+
+function renderSavedDays(){
+  const c=$("sd-content");
+  if(!savedDays.length){
+    c.innerHTML=`<div class="sd-empty">No saved days yet.<br>Tap a day header to save one.</div>`;
+    return;
+  }
+  c.innerHTML="";
+  savedDays.forEach(day=>{
+    const wrap=document.createElement("div");
+    if(sdPreviewId===day.id){
+      const prev=document.createElement("div");
+      prev.className="sd-preview";
+      prev.innerHTML=day.blocks.length
+        ? day.blocks.map(b=>`<div class="sd-preview-block"><div class="sd-preview-dot" style="background:${b.color}"></div><div class="sd-preview-name">${b.label}</div><div class="sd-preview-time">${fmtTime(b.startMins)}–${fmtTime(b.startMins+b.duration)}</div></div>`).join("")
+        : `<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:4px 0">Empty day</div>`;
+      const applyBtn=document.createElement("button");
+      applyBtn.className="btn-primary";
+      applyBtn.style.cssText="width:100%;margin-top:10px;padding:11px 0;font-size:13px;";
+      applyBtn.textContent="Apply to schedule";
+      applyBtn.onclick=()=>{
+        blocks=blocks.filter(b=>b.day!==sdTargetDay);
+        day.blocks.forEach(b=>{ blocks.push({id:++nextId,day:sdTargetDay,...b}); });
+        renderBlocks(); sddPanel.style.display="none";
+      };
+      prev.appendChild(applyBtn);
+      wrap.appendChild(prev);
+    }
+    const item=document.createElement("div");
+    item.className="sd-item";
+    item.innerHTML=`<div><div class="sd-item-name">${day.name}</div><div class="sd-item-count">${day.blocks.length} block${day.blocks.length!==1?'s':''}</div></div><div class="sd-item-actions"><button class="chip" data-rename="${day.id}" style="font-size:10px;padding:4px 8px;">rename</button><button class="chip" data-delete="${day.id}" style="font-size:10px;padding:4px 8px;color:#e74c3c;border-color:rgba(231,76,60,0.3);">✕</button></div>`;
+    item.addEventListener("click",e=>{
+      if(e.target.dataset.rename){ const n=prompt("Rename:",day.name); if(n&&n.trim()){ day.name=n.trim(); persistSavedDays(); renderSavedDays(); } return; }
+      if(e.target.dataset.delete){ if(confirm(`Delete "${day.name}"?`)){ savedDays=savedDays.filter(x=>x.id!==day.id); persistSavedDays(); renderSavedDays(); } return; }
+      sdPreviewId=sdPreviewId===day.id?null:day.id; renderSavedDays();
+    });
+    wrap.appendChild(item);
+    c.appendChild(wrap);
   });
-  lines.push('END:VCALENDAR');
-  const encoded = encodeURIComponent(lines.join('\r\n'));
-  const a = document.createElement('a');
-  a.href = 'data:text/calendar;charset=utf-8,' + encoded;
-  a.download = 'sked.ics';
-  a.click();
 }
-$("export-btn").onclick=exportICS;
 
 updateThumb();
 </script>
