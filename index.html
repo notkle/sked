@@ -100,7 +100,17 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
 .day-popup-btn.danger{color:#e74c3c;background:rgba(231,76,60,0.08);border-color:rgba(231,76,60,0.2);}
 #settings-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:70;display:none;align-items:flex-end;justify-content:center;}
 
-/* Edit saves panel */
+/* Tracker panel */
+#tracker-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:70;display:none;align-items:flex-end;justify-content:center;}
+#tracker-box{background:#16161f;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:84vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-bottom:none;}
+.tr-row{margin-bottom:14px;}
+.tr-label-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.tr-name{font-size:12px;font-weight:500;}
+.tr-hours{font-size:11px;color:rgba(255,255,255,0.4);}
+.tr-bar-bg{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;}
+.tr-bar-fill{height:100%;border-radius:4px;transition:width .4s ease;}
+.tr-empty{text-align:center;padding:30px 0;font-size:13px;color:rgba(255,255,255,0.25);}
+.tr-reset{width:100%;margin-top:18px;padding:10px 0;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.2);border-radius:11px;color:#e74c3c;font-size:12px;cursor:pointer;font-family:inherit;}
 #editsaves-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:80;display:none;align-items:flex-end;justify-content:center;}
 #editsaves-box{background:#16161f;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:84vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-bottom:none;}
 .es-folder{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px;overflow:hidden;}
@@ -164,6 +174,7 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
   <div id="navbar">
     <div id="nav-logo">sk<span>ed</span></div>
     <div id="nav-right">
+    <button class="nav-btn" id="tracker-btn">▦</button>
     <button class="nav-btn" id="settings-btn">⚙ settings</button>
     </div>
   </div>
@@ -224,6 +235,18 @@ html,body{height:100%;background:#0a0a0f;font-family:'DM Sans',sans-serif;color:
     </div>
     <div id="es-content"></div>
     <button class="es-add-folder" id="es-add-folder-btn">+ add folder</button>
+  </div>
+</div>
+
+<div id="tracker-panel">
+  <div id="tracker-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div style="font-size:15px;font-weight:600;">Activity tracker</div>
+      <button id="tracker-close" style="background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;">×</button>
+    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:18px;">All-time hours from completed schedule blocks</div>
+    <div id="tracker-content"></div>
+    <button class="tr-reset" id="tracker-reset">Reset all totals</button>
   </div>
 </div>
 
@@ -540,6 +563,7 @@ let activeBlockId=null;
 function deactivateAll(){
   document.querySelectorAll(".block.activated").forEach(e=>e.classList.remove("activated"));
   activeBlockId=null;
+  gridVert.style.overflowY="scroll";
 }
 
 function attachEvents(el,b){
@@ -550,6 +574,7 @@ function attachEvents(el,b){
       deactivateAll();
       el.classList.add("activated");
       activeBlockId=b.id;
+      gridVert.style.overflowY="hidden";
       return;
     }
     // Second tap = open edit
@@ -889,6 +914,46 @@ function renderEditSaves(){
     c.appendChild(wrap);
   });
 }
+
+// Tracker
+let trackerTotals=JSON.parse(localStorage.getItem('sked-tracker')||'{}');
+let lastTrackedDate=localStorage.getItem('sked-tracker-date')||'';
+function persistTracker(){ localStorage.setItem('sked-tracker',JSON.stringify(trackerTotals)); localStorage.setItem('sked-tracker-date',lastTrackedDate); }
+
+function runTracker(){
+  const today=now.toDateString();
+  if(lastTrackedDate===today) return;
+  const done=blocks.filter(b=>b.day===0&&(b.startMins+b.duration)<=nowMins);
+  if(!done.length) return;
+  done.forEach(b=>{ const k=b.label.toLowerCase().trim(); trackerTotals[k]=(trackerTotals[k]||0)+b.duration; });
+  lastTrackedDate=today; persistTracker();
+}
+
+function renderTracker(){
+  const c=$("tracker-content");
+  const entries=Object.entries(trackerTotals).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){ c.innerHTML=`<div class="tr-empty">No activity logged yet.<br>Elapsed blocks from today's schedule appear here.</div>`; return; }
+  const maxMins=entries[0][1];
+  c.innerHTML=entries.map(([label,mins])=>{
+    const hrs=(mins/60).toFixed(1);
+    const pct=Math.round((mins/maxMins)*100);
+    const match=blocks.find(b=>b.label.toLowerCase().trim()===label);
+    const color=match?match.color:'#2980b9';
+    return `<div class="tr-row"><div class="tr-label-row"><span class="tr-name" style="color:${color}">${label}</span><span class="tr-hours">${hrs}h total</span></div><div class="tr-bar-bg"><div class="tr-bar-fill" style="width:${pct}%;background:${color};opacity:0.7;"></div></div></div>`;
+  }).join("");
+}
+
+const trackerPanel=$("tracker-panel");
+$("tracker-btn").onclick=()=>{ runTracker(); renderTracker(); trackerPanel.style.display="flex"; };
+$("tracker-close").onclick=()=>{ trackerPanel.style.display="none"; };
+trackerPanel.addEventListener("click",e=>{ if(e.target===trackerPanel) trackerPanel.style.display="none"; });
+$("tracker-reset").onclick=()=>{
+  overlay.style.display="flex";
+  modal.innerHTML=`<div class="modal-header"><span class="modal-title">Reset all totals?</span></div><div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">This clears all accumulated hours permanently.</div><div class="btn-row"><button class="btn-danger" id="do-confirm-reset" style="flex:1">Reset</button><button class="btn-secondary" id="do-cancel-reset">Cancel</button></div>`;
+  $("do-confirm-reset").onclick=()=>{ trackerTotals={}; lastTrackedDate=''; persistTracker(); closeModal(); renderTracker(); };
+  $("do-cancel-reset").onclick=closeModal;
+};
+runTracker();
 
 updateThumb();
 </script>
